@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Cookie Cats A/B Test Results</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #222; }
+    h1 { font-size: 1.4em; }
+    .metric-card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin: 20px 0; }
+    .sig { color: #1a7a3c; font-weight: bold; }
+    .not-sig { color: #999; }
+    .bar-row { display: flex; align-items: center; margin: 8px 0; }
+    .bar-label { width: 90px; font-size: 0.9em; }
+    .bar { height: 24px; background: #4a7fd6; border-radius: 4px; display: flex; align-items: center; color: white; padding-left: 8px; font-size: 0.85em; }
+    .bar.b { background: #d6824a; }
+    .verdict { margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 6px; font-size: 0.95em; }
+    #loading { color: #999; }
+  </style>
+</head>
+<body>
+  <h1>Cookie Cats A/B Test — Gate at Level 30 vs Level 40</h1>
+  <p>Testing whether moving the game's paywall/gate from level 30 to level 40 changes player retention and engagement.</p>
+  <div id="loading">Loading results from API...</div>
+  <div id="results"></div>
+
+  <script>
+    const metrics = [
+      { endpoint: '/api/cookie-cats/retention_1', title: 'Day 1 Retention', desc: '% of players still playing 1 day after install' },
+      { endpoint: '/api/cookie-cats/retention_7', title: 'Day 7 Retention', desc: '% of players still playing 7 days after install' },
+      { endpoint: '/api/cookie-cats/gamerounds', title: 'Rounds Played', desc: 'average game rounds played per player', isMean: true }
+    ];
+
+    async function loadResults() {
+      const container = document.getElementById('results');
+      document.getElementById('loading').style.display = 'none';
+
+      for (const m of metrics) {
+        try {
+          const res = await fetch(m.endpoint);
+          const data = await res.json();
+          container.appendChild(renderCard(m, data));
+        } catch (e) {
+          const div = document.createElement('div');
+          div.textContent = `Could not load ${m.title} — is app.py running on port 5001?`;
+          container.appendChild(div);
+        }
+      }
+    }
+
+    function renderCard(meta, data) {
+      const card = document.createElement('div');
+      card.className = 'metric-card';
+
+      const isMean = meta.isMean;
+      const valA = isMean ? data.mean_a : data.rate_a * 100;
+      const valB = isMean ? data.mean_b : data.rate_b * 100;
+      const maxVal = Math.max(valA, valB) * 1.2;
+
+      const sig = data['significant_at_0.05'];
+      const sigLabel = sig
+        ? `<span class="sig">Statistically significant (p = ${data.p_value})</span>`
+        : `<span class="not-sig">Not statistically significant (p = ${data.p_value})</span>`;
+
+      const unit = isMean ? '' : '%';
+      const fmt = (v) => isMean ? v.toFixed(1) : v.toFixed(1) + unit;
+
+      card.innerHTML = `
+        <h3>${meta.title}</h3>
+        <p style="color:#666; font-size:0.9em;">${meta.desc}</p>
+        <div class="bar-row">
+          <div class="bar-label">gate_30</div>
+          <div class="bar" style="width:${(valA / maxVal * 300).toFixed(0)}px">${fmt(valA)}</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">gate_40</div>
+          <div class="bar b" style="width:${(valB / maxVal * 300).toFixed(0)}px">${fmt(valB)}</div>
+        </div>
+        <div class="verdict">${sigLabel}</div>
+      `;
+      return card;
+    }
+
+    loadResults();
+  </script>
+</body>
+</html>
